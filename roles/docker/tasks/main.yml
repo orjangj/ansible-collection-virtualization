@@ -71,3 +71,4 @@
     append: true
   register: docker_users_added
   with_items: "{{ docker_users }}"
+  when: docker_users | length > 0
