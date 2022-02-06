@@ -1,0 +1,65 @@
+---
+- name: ensure package dependencies
+  become: true
+  ansible.builtin.apt:
+    state: present
+    update_cache: yes
+    cache_valid_time: "86400" # One day
+    name:
+      - apt-transport-https
+      - build-essential
+      - ca-certificates
+      - curl
+      - gcc
+      - gnupg-agent
+      - "linux-headers-{{ ansible_kernel }}"
+      - software-properties-common
+
+- name: add virtualbox apt signing key
+  become: true
+  ansible.builtin.apt_key:
+    url: "{{ item.url }}"
+    id: "{{ item.id }}"
+    state: present
+  with_items:
+    - { url: https://download.virtualbox.org/virtualbox/debian/oracle_vbox.asc, id: 7B0FAB3A13B907435925D9C954422A4B98AB5139 }
+    - { url: https://download.virtualbox.org/virtualbox/debian/oracle_vbox_2016.asc, id: B9F8D658297AF3EFC18D5CDFA2F683C52980AECF }
+
+- name: add virtualbox apt repository
+  become: true
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64] https://download.virtualbox.org/virtualbox/debian {{ ansible_facts['distribution_release'] }} contrib"
+    state: present
+  register: virtualbox_repository
+
+- name: update package cache
+  become: true
+  ansible.builtin.apt:
+    update_cache: yes
+  when: virtualbox_repository.changed
+
+- name: install virtualbox
+  become: true
+  ansible.builtin.apt:
+    state: present
+    name: "virtualbox-{{ virtualbox_version }}"
+
+- name: check kernel module status
+  command: /usr/lib/virtualbox/vboxdrv.sh status
+  register: vboxdrv_status
+  changed_when: False
+
+- name: rebuild kernel modules
+  become: true
+  command: /usr/lib/virtualbox/vboxdrv.sh setup
+  when:
+    - "'is loaded' not in vboxdrv_status.stdout"
+    - "'are loaded' not in vboxdrv_status.stdout"
+
+#- name: Virtualbox - setup virtualbox user
+#  become: yes
+#  user:
+#      name: "{{ item }}"
+#      groups: vboxusers
+#      append: yes
+#  with_items: "{{ virtualbox_users }}"
